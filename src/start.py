@@ -1,3 +1,5 @@
+"""Script to start server process."""
+
 import os
 
 from tweet_notifier import TweetNotifier
@@ -10,3 +12,4 @@ if __name__ == "__main__":
         "sample.xlsx",
     )
     notifier = TweetNotifier(path)
+    notifier.main_loop()
