@@ -1,3 +1,4 @@
+emoji>=1.2.0
 ipython>=7.23.1
 openpyxl>=3.0.7
 pandas>=1.2.4
