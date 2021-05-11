@@ -5,9 +5,10 @@ from typing import Dict, List, Set
 
 import pandas as pd
 
-from . import lib
+from . import email, lib
 
 USER_MAP_PATH = os.path.join(os.path.expanduser("~"), "user_map.pkl")
+LOG_PATH = os.path.join(os.path.expanduser("~"), "tweet.log")
 
 
 def parse_request_table(path: str) -> pd.DataFrame:
@@ -39,14 +40,18 @@ def filter_tweets(
 
 
 class TweetNotifier:
-    def __init__(self, path_table):
-        self.logger = lib.get_logger("TweetNotifier")
+    def __init__(self, path_table: str, receivers: List[str]):
+        self.logger = lib.get_logger(
+            "TweetNotifier", logpath=LOG_PATH, rotate=True
+        )
         self.bearer_token = lib.get_bearer_token()
+        self.smtp_config = email.get_smtp_config()
         df = parse_request_table(path_table)
         self.user_map = self.read_user_map()
         self.update_user_map(df["username"])
         self.save_user_map()
         self.tracked = self.generate_tracking_table(df)
+        self.receivers = receivers
 
     def read_user_map(
         self,
@@ -88,7 +93,7 @@ class TweetNotifier:
             )
         }
 
-    def refresh(self):
+    def refresh(self, forward=True):
         for userid in self.tracked:
             meta, tweets = lib.get_user_tweets(
                 self.bearer_token,
@@ -96,21 +101,39 @@ class TweetNotifier:
                 since_id=self.tracked[userid]["last_tweet_id"],
             )
             if tweets:  # got new tweets since last tweet id
+                self.logger.info(
+                    f"Found {meta['result_count']} new tweets "
+                    f"for userid: {userid}"
+                )
                 self.tracked[userid]["last_tweet_id"] = meta["newest_id"]
                 tweets_filtered = filter_tweets(
                     tweets, self.tracked[userid]["keywords"]
                 )
-                for tweet in tweets_filtered:
-                    self.forward(userid, tweet)
+                self.logger.info(
+                    f"{len(tweets_filtered)}/{meta['result_count']} matched "
+                    f"for userid: {userid}, "
+                    f"username: {self.tracked[userid]['username']}"
+                )
+                if tweets_filtered and forward:
+                    self.forward(
+                        self.tracked[userid]["username"], tweets_filtered
+                    )
+            else:
+                self.logger.info(f"No new tweets found for userid: {userid}")
 
-    def forward(self, userid, tweet):
+    def forward(self, username, tweets):
+        """Forward a list of tweets from a given username."""
         self.logger.info(
-            f"Got new tweet from @{self.tracked[userid]['username']}: {tweet}"
+            f"Forwarding {len(tweets)} new matching tweets from @{username}"
         )
+        msgs = [email.create_from_tweet(username, tweet) for tweet in tweets]
+        email.send_emails(msgs, self.receivers, **self.smtp_config)
 
     def main_loop(self):
+        self.logger.info("Refreshing for initial load...")
+        self.refresh(forward=False)
         while True:
-            self.logger.info("Refreshing...")
-            self.refresh()
             self.logger.info("Sleeping...")
-            lib.countdown_sec(60)
+            lib.countdown_sec(10)
+            self.logger.info("Refreshing...")
+            self.refresh(forward=True)
