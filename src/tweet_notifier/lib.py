@@ -12,7 +12,7 @@ from . import apiv2
 
 def countdown_sec(t):  # in seconds
     t = int(t)
-    for i in reversed(range(t)):
+    for i in range(t, 0, -1):
         sys.stderr.write(f"\rSleeping... ({i:2d} s / {t} s)")
         time.sleep(1)
         sys.stdout.flush()
