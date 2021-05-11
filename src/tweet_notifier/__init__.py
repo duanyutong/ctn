@@ -3,9 +3,10 @@ import pickle
 import string
 from typing import Dict, List, Set
 
+import emoji
 import pandas as pd
 
-from . import email, lib
+from . import apiv2, email, lib
 
 USER_MAP_PATH = os.path.join(os.path.expanduser("~"), "user_map.pkl")
 LOG_PATH = os.path.join(os.path.expanduser("~"), "tweet.log")
@@ -17,9 +18,9 @@ def parse_request_table(path: str) -> pd.DataFrame:
     Capitalised columns are in the original file.
     Derived columns are all lower case.
     """
-    table = pd.read_excel(path).dropna()
-    table["username"] = table["Link"].str.split("/").str[-1]
-    return table
+    df = pd.read_excel(path).dropna()
+    df["username"] = df["Link"].str.split("/").str[-1]
+    return df
 
 
 def filter_tweets(
@@ -28,13 +29,13 @@ def filter_tweets(
     """Filter a list of tweets from json response given a list of keywords."""
 
     def tweet_is_matched(tweet):
+        demoji = emoji.demojize(tweet["text"].lower(), delimiters=(" ", " "))
+        # need loop because some "keywords" include spaces
+        kw_matched = any(kw in demoji for kw in keywords)
         words = set(
-            tweet["text"]
-            .lower()
-            .translate(str.maketrans("", "", string.punctuation))
-            .split()
+            demoji.translate(str.maketrans("", "", string.punctuation)).split()
         )
-        return bool(words & keywords)
+        return bool(words & keywords) | kw_matched
 
     return list(filter(tweet_is_matched, tweets))
 
@@ -53,9 +54,8 @@ class TweetNotifier:
         self.tracked = self.generate_tracking_table(df)
         self.receivers = receivers
 
-    def read_user_map(
-        self,
-    ):
+    @staticmethod
+    def read_user_map():
         """Keep track of known userids and their last update time.
 
         user_map is a dict usernames to userids and last tweet ids.
@@ -73,7 +73,6 @@ class TweetNotifier:
             userids = lib.lookup_user(self.bearer_token, usernames)
             for username, userid in zip(usernames, userids):
                 self.user_map[username] = {"userid": userid}
-
         self.logger.debug(f"Updated user map:\n{self.user_map}")
 
     def save_user_map(self):
@@ -89,7 +88,8 @@ class TweetNotifier:
                 "last_tweet_id": None,
             }
             for username, keywords in zip(
-                df["username"], df["Keywords"].str.split(kw_delimiter)
+                df["username"],
+                df["Keywords"].str.lower().str.split(kw_delimiter),
             )
         }
 
@@ -126,14 +126,14 @@ class TweetNotifier:
         self.logger.info(
             f"Forwarding {len(tweets)} new matching tweets from @{username}"
         )
-        msgs = [email.create_from_tweet(username, tweet) for tweet in tweets]
-        email.send_emails(msgs, self.receivers, **self.smtp_config)
+        email.send_emails(username, tweets, self.receivers, **self.smtp_config)
 
     def main_loop(self):
         self.logger.info("Refreshing for initial load...")
         self.refresh(forward=False)
+        delta_t = len(self.tracked) / (apiv2.RATE_LIMIT / 60) + 1  # truncate
         while True:
             self.logger.info("Sleeping...")
-            lib.countdown_sec(10)
+            lib.countdown_sec(delta_t)
             self.logger.info("Refreshing...")
             self.refresh(forward=True)
