@@ -2,6 +2,9 @@
 
 import requests
 
+# https://developer.twitter.com/en/docs/twitter-api/tweets/timelines/migrate
+RATE_LIMIT = 1500 / 15  # requests per minute with OAuth 2.0 bearer token
+
 
 def create_headers(bearer_token):
     headers = {"Authorization": f"Bearer {bearer_token}"}
