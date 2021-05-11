@@ -13,7 +13,7 @@ from . import apiv2
 def countdown_sec(t):  # in seconds
     t = int(t)
     for i in reversed(range(t)):
-        sys.stderr.write(f"\rSleeping... ({i} s / {t} s)")
+        sys.stderr.write(f"\rSleeping... ({i:2d} s / {t} s)")
         time.sleep(1)
         sys.stdout.flush()
     print(f"\nSleep finished ({t} s)")
@@ -118,7 +118,7 @@ def get_user_tweets(bearer_token, userid, since_id=None, tweetfields=None):
 
     If since_id isn't specified, only fetch the latest few tweets.
     """
-    params = {"since_id": since_id, "max_results": 2}
+    params = {"since_id": since_id, "max_results": 5}
     if tweetfields is None:
         params["tweet.fields"] = "created_at"
     else:
