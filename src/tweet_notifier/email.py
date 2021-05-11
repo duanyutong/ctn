@@ -38,7 +38,7 @@ def create_from_tweet(username, tweet):
     """ + (
         "\nYou are receiving this email because "
         "you are subscribed to the latest updates. "
-        'To unsubscribe, reply with "unsubscribe"'
+        'To unsubscribe, reply with "unsubscribe".'
     )
     return inspect.cleandoc(msg)
 
