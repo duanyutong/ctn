@@ -131,7 +131,7 @@ class TweetNotifier:
     def main_loop(self):
         self.logger.info("Refreshing for initial load...")
         self.refresh(forward=False)
-        delta_t = len(self.tracked) / (apiv2.RATE_LIMIT / 60) + 1  # truncate
+        delta_t = len(self.tracked) / (apiv2.RATE_LIMIT / 60)  # truncate
         while True:
             self.logger.info("Sleeping...")
             lib.countdown_sec(delta_t)
