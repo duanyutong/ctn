@@ -1,5 +1,6 @@
 """Wrappers of APIv2 to perform certain twitter functions."""
 
+import html
 import logging
 import logging.handlers
 import os
@@ -12,9 +13,9 @@ from . import apiv2
 
 def countdown_sec(t):  # in seconds
     t = int(t)
-    for i in range(t, 0, -1):
+    for i in range(t, -1, -1):
         sys.stderr.write(f"\rSleeping... ({i:2d} s / {t} s)")
-        time.sleep(1)
+        time.sleep(int(i > 0))
         sys.stdout.flush()
     print(f"\nSleep finished ({t} s)")
 
@@ -132,4 +133,9 @@ def get_user_tweets(bearer_token, userid, since_id=None, tweetfields=None):
                 bearer_token, url, params=params
             )
             resp = consolidate_pagination_responses(resp, next_resp)
-    return resp["meta"], resp.get("data")  # 'data' is missing when 0 count
+    # 'data' is missing when 0 count
+    meta, tweets = resp["meta"], resp.get("data")
+    if tweets:  # unescape HTML characters before filtering by keywords
+        for i, tweet in enumerate(tweets):
+            tweets[i]["text"] = html.unescape(tweet["text"])
+    return meta, tweets
